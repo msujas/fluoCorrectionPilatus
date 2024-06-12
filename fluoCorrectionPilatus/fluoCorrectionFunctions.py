@@ -39,10 +39,9 @@ def detectorShape(poniFile):
     det = det.astype('uint16')
     return det
 
-det = detectorShape(r'X:\users\ch6985/Si90_15tilt.poni')
-
 
 def solidAngleMap(poniFile):
+    det = detectorShape(poniFile)
     poniDct = readPoni(poniFile)
     poni1 = poniDct['Poni1']
     poni2 = poniDct['Poni2']
