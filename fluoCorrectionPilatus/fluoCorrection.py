@@ -1,9 +1,8 @@
 import fluoCorrectionFunctions as fluoCorrectionFunctions
-import cryio
 
 
 
-imageFile = r'' #averag_gainCorrected file from maskGenerator
+imageFile = r'' #average_gainCorrected file from maskGenerator
 poniFile = r'' #poni file used
 fluoScale = 7.5e5
 
