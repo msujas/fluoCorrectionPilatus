@@ -1,9 +1,7 @@
-import maskGeneratorBM31
 import numpy as np
 import pyFAI.geometry
 import cryio
-import matplotlib.pyplot as plt
-import maskGeneratorBM31
+import fabio
 import os
 
 def solidAngle(poni1,poni2, d, px, py,psize = 172e-6):
@@ -73,8 +71,19 @@ def fluoSub(imageFile,poniFile, fluoK):
     
     poni.integrate1d(data = fluoCorr, filename = outfile,mask = mask,polarization_factor = 0.99,unit = '2th_deg',
                     correctSolidAngle = True, method = 'bbox',npt = 5000, error_model = 'poisson', safe = False)
-    maskGeneratorBM31.clearPyFAI_header(outfile)
+    clearPyFAI_header(outfile)
     result = poni.integrate2d(data = fluoCorr, filename = outfile_2d,mask = mask,polarization_factor = 0.99,unit = "2th_deg",
                     correctSolidAngle = True, method = 'bbox',npt_rad = 5000, npt_azim = 360, error_model = 'poisson', safe = False)
-    maskGeneratorBM31.bubbleHeader(outfile_2d,*result[:3])
+    bubbleHeader(outfile_2d,*result[:3])
 
+def bubbleHeader(file2d,array2d, tth, eta):
+    header = {
+    'Bubble_cake' : f'{tth[0]} {tth[-1]} {eta[0]} {eta[-1]}',
+    'Bubble_normalized': 1 
+    }
+    f = fabio.edfimage.EdfImage(data = array2d.transpose(), header = header)
+    f.write(file2d)
+
+def clearPyFAI_header(file):
+    x,y,e = np.loadtxt(file,unpack = True, comments = '#')
+    np.savetxt(file,np.array([x,y,e]).transpose(), '%.6f')
