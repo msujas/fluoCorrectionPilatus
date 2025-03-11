@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools >= 60.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fluoCorrectionPilatus"
+version = "1.0.0"
+requires-python = ">= 3.10"
+dependencies = ["numpy", "pyFAI", "cryio", "fabio"]
+authors = [{name = "Kenneth P. Marshall", email = "kenneth.marshall@esrf.fr"}]
+maintainers = [{name = "Kenneth P. Marshall", email = "kenneth.marshall@esrf.fr"}]
+description = "functions for subtracting fluorescence from Pilatus images"
+readme = {file = "README.MD", content-type = "text/markdown"}
+keywords = ["fluorescence", "X-ray area detectorss"]
+classifiers = [
+"Programming Language :: Python :: 3.12"]
+
+[tool.setuptools]
+packages = ["fluoCorrectionPilatus"]
+

@@ -58,7 +58,13 @@ def fluoCorrectionPyfai(poniFile,fluoK=1):
     return saMap*fluoK
 
 def fluoSub(imageFile,poniFile, fluoK):
-    imageArray = cryio.cbfimage.CbfImage(imageFile).array
+    ext = os.path.splitext(imageFile)[-1]
+    if ext == '.cbf':
+        imageArray = cryio.cbfimage.CbfImage(imageFile).array
+    elif ext == '.edf' or ext == '.tif':
+        imageArray = fabio.open(imageFile).data
+    else:
+        raise ValueError('image type needs to be .cbf, .edf, or .tif')
     fluoArray = fluoCorrectionPyfai(poniFile, fluoK)
     poni = pyFAI.load(poniFile)
     fluoCorr = imageArray - fluoArray
@@ -68,7 +74,7 @@ def fluoSub(imageFile,poniFile, fluoK):
     outfile = f'{direc}/xye/{outfilebase}.xye'
     outfile_2d = f'{direc}/xye/{outfilebase}.edf'
     mask = np.where(imageArray < 0, 1, 0)
-    
+    os.makedirs(f'{direc}/xye/', exist_ok = True)
     poni.integrate1d(data = fluoCorr, filename = outfile,mask = mask,polarization_factor = 0.99,unit = '2th_deg',
                     correctSolidAngle = True, method = 'bbox',npt = 5000, error_model = 'poisson', safe = False)
     clearPyFAI_header(outfile)
