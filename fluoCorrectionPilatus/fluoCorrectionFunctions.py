@@ -95,7 +95,7 @@ def optimise_fluoFormula(k0,imagefile, ponifile, index = 4800):
     return (arrayline - linemean)**2
 
 def optimise_fluo(imagefile, ponifile,k0, index = 4800, iters = 20):
-    result = least_squares(optimise_fluoFormula,[k0], args = (imagefile, ponifile, index), max_nfev=iters,verbose=1)
+    result = least_squares(optimise_fluoFormula,[k0], args = (imagefile, ponifile, index), max_nfev=iters, bounds = (0,np.inf))
     kopt = result['x'][0]
     return fluoSub(imagefile,ponifile,kopt)
 
