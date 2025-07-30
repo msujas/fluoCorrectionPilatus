@@ -3,6 +3,7 @@ import pyFAI.geometry
 import cryio
 import fabio
 import os
+from scipy.optimize import least_squares
 
 def solidAngle(poni1,poni2, d, px, py,psize = 172e-6):
     xpos = px*psize
@@ -81,6 +82,23 @@ def fluoSub(imageFile,poniFile, fluoK):
     result = poni.integrate2d(data = fluoCorr, filename = outfile_2d,mask = mask,polarization_factor = 0.99,unit = "2th_deg",
                     correctSolidAngle = True, method = 'bbox',npt_rad = 5000, npt_azim = 360, error_model = 'poisson', safe = False)
     bubbleHeader(outfile_2d,*result[:3])
+    print(fluoK)
+    return result
+
+def optimise_fluoFormula(k0,imagefile, ponifile, index = 4800):
+    result = fluoSub(imagefile, ponifile, k0)
+    array = result[0]
+    arrayline = array[:,index]
+    indexes = np.where(arrayline == 0)
+    arrayline = np.delete(arrayline,indexes)
+    linemean = np.nanmean(arrayline)
+    return (arrayline - linemean)**2
+
+def optimise_fluo(imagefile, ponifile,k0, index = 4800, iters = 20):
+    result = least_squares(optimise_fluoFormula,[k0], args = (imagefile, ponifile, index), max_nfev=iters,verbose=1)
+    kopt = result['x'][0]
+    return fluoSub(imagefile,ponifile,kopt)
+
 
 def bubbleHeader(file2d,array2d, tth, eta):
     header = {
