@@ -2,9 +2,9 @@ from fluoCorrectionPilatus import fluoSub, optimise_fluo
 import os
 from glob import glob
 
-scale = 1e6
-direc = r'C:\Users\kenneth1a\Documents\beamlineData\boJiang_capillaries'
-poniFile = r'C:\Users\kenneth1a\Documents\beamlineData\boJiang_capillaries/Si_0_MD.poni' #poni file used
+scale = 5e5
+direc = r''
+poniFile = r'' #poni file used
 optimise = True
 index = 4800
 iters = 10
