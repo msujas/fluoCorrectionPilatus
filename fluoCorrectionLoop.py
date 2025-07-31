@@ -1,4 +1,4 @@
-from fluoCorrectionPilatus import fluoSub, optimise_fluo
+from fluoCorrectionPilatus import fluoSub, optimise_fluo,optimiseFluoBins
 import os
 from glob import glob
 
@@ -14,6 +14,7 @@ for root, dirs,files in os.walk(direc):
     cbfs = glob(f'{root}/*.cbf')
     for cbf in cbfs:
         if optimise:
-            optimise_fluo(cbf, poniFile,scale,index,iters)
+            #optimise_fluo(cbf, poniFile,scale,index,iters)
+            optimiseFluoBins(cbf, poniFile, scale, 5000, index)
         else:
             fluoSub(cbf, poniFile, scale)
