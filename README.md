@@ -7,3 +7,9 @@ Use: in the fluoCorrection.py or fluoCorrection_optimise.py script input the ave
 The fluoCorrectionLoop.py script will search for all averaged files in the directory recursively. Can be done with or without the optimiser.
 
 The optimiser works by trying to flatten a bin of the 2d integrated pattern.
+
+Non corrected:
+<img width="1473" height="585" alt="image" src="https://github.com/user-attachments/assets/3420fbf7-f972-4ff9-b6f5-d4258f16aa8c" />
+
+Corrected:
+<img width="1474" height="584" alt="image" src="https://github.com/user-attachments/assets/a81253c3-af7d-47ae-ab54-a94c46430311" />
