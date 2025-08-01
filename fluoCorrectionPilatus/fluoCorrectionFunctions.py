@@ -71,7 +71,7 @@ def getmaps(ponifile):
 def fluoCorrectionPyfai(poniFile,fluoK=1):
     return getSAmap(poniFile)*fluoK
 
-def fluoSub(imageFile,poniFile, fluoK):
+def readFile(imageFile):
     ext = os.path.splitext(imageFile)[-1]
     if ext == '.cbf':
         imageArray = cryio.cbfimage.CbfImage(imageFile).array
@@ -79,6 +79,10 @@ def fluoSub(imageFile,poniFile, fluoK):
         imageArray = fabio.open(imageFile).data
     else:
         raise ValueError('image type needs to be .cbf, .edf, or .tif')
+    return imageArray
+
+def fluoSub(imageFile,poniFile, fluoK):
+    imageArray = readFile(imageFile)
     fluoArray = fluoCorrectionPyfai(poniFile, fluoK)
     poni = pyFAI.load(poniFile)
     fluoCorr = imageArray - fluoArray
@@ -167,16 +171,17 @@ def rebin(array, nbins):
     return np.array([np.mean(array[i*binsize:(i+1)*binsize]) for i in range(nbins)])
     
 def fluobinPrep(avfile, ponifile):
-    array = cryio.cbfimage.CbfImage(avfile).array
+    array = readFile(avfile)
     tthmap, saMap, polmap = getmaps(ponifile)
     return array, tthmap, saMap, polmap
 
 def fluoSubBins(fluoK, array, tthmap, saMap, polmap, nbins, index):
+    if index > nbins:
+        raise ValueError('index must be less than the number of bins')
     fluosubarray = array - (saMap*fluoK)
     fluosubarray = fluosubarray/(saMap*polmap)
     binsize = np.max(tthmap)/nbins
     binarray = ((tthmap+binsize/2)*(nbins-1)//np.max(tthmap)).astype(int)
-    
     arrayline = fluosubarray[np.where((binarray == index) & (array >= 0))]
     #arrayline = rebin(arrayline, 200)
     linemean = np.mean(arrayline)
