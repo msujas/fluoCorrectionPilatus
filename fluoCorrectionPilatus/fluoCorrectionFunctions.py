@@ -203,7 +203,8 @@ def fluoSubBins(fluoK, array, tthmap, saMap, polmap, nbins, index):
     arrayline = fluosubarray[np.where((binarray == index) & (array >= 0))]
     #arrayline = rebin(arrayline, 200)
     linemean = np.mean(arrayline)
-    return (arrayline - linemean)**2
+    modifier = np.where(arrayline >= 0, 0, arrayline**2)
+    return (arrayline - linemean)**2 + modifier
 
 def optimiseFluoBins(avfile, ponifile,k0, nbins, index):
     if index > nbins:
