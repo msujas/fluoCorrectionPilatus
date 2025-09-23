@@ -81,7 +81,7 @@ def readFile(imageFile):
         raise ValueError('image type needs to be .cbf, .edf, or .tif')
     return imageArray
 
-def fluoSub(imageFile,poniFile, fluoK):
+def fluoSub(imageFile,poniFile, fluoK, saveOriginal = False):
     imageArray = readFile(imageFile)
     fluoArray = fluoCorrectionPyfai(poniFile, fluoK)
     poni = pyFAI.load(poniFile)
@@ -100,6 +100,10 @@ def fluoSub(imageFile,poniFile, fluoK):
                     correctSolidAngle = True, method = 'bbox',npt_rad = 5000, npt_azim = 360, error_model = 'poisson', safe = False)
     bubbleHeader(outfile_2d,*result[:3])
     print(fluoK)
+    if saveOriginal:
+        im = fabio.edfimage.EdfImage()
+        im.data = np.where(fluoCorr<0, -1, fluoCorr)
+        im.save(f'{direc}/{outfilebase}.edf')
     return result
 
 def fluoSub_integrated_base(cakeArray, polArray_integrated, fluoK):
@@ -203,17 +207,17 @@ def fluoSubBins(fluoK, array, tthmap, saMap, polmap, nbins, index):
     arrayline = fluosubarray[np.where((binarray == index) & (array >= 0))]
     #arrayline = rebin(arrayline, 200)
     linemean = np.mean(arrayline)
-    modifier = np.where(arrayline >= 0, 0, arrayline**2)
+    modifier = np.where(arrayline >= 0, 0, arrayline**2) #np.bitwise_and(arrayline.astype(np.int32),-2**32)*100/2**32 #punish negative values
     return (arrayline - linemean)**2 + modifier
 
-def optimiseFluoBins(avfile, ponifile,k0, nbins, index):
+def optimiseFluoBins(avfile, ponifile,k0, nbins, index, saveOriginal=False):
     if index > nbins:
         raise ValueError('index must be less than the number of bins')
     array, tthmap, saMap, polmap = fluobinPrep(avfile,ponifile)
     result = least_squares(fluoSubBins, k0, args = (array, tthmap, saMap, polmap,nbins, index), bounds = (0,np.inf))
     kopt = result['x'][0]
     print(kopt)
-    return fluoSub(avfile, ponifile, kopt)
+    return fluoSub(avfile, ponifile, kopt, saveOriginal=saveOriginal)
 
 def bubbleHeader(file2d,array2d, tth, eta):
     header = {
