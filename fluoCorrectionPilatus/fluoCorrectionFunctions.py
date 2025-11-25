@@ -101,9 +101,10 @@ def fluoSub(imageFile,poniFile, fluoK, saveOriginal = False):
     bubbleHeader(outfile_2d,*result[:3])
     print(fluoK)
     if saveOriginal:
-        im = fabio.edfimage.EdfImage()
-        im.data = np.where(fluoCorr<0, -1, fluoCorr)
-        im.save(f'{direc}/{outfilebase}.edf')
+        #im = fabio.edfimage.EdfImage()
+        im = cryio.cbfimage.CbfImage()
+        im.array = np.where(fluoCorr<0, -1, fluoCorr)
+        im.save(f'{direc}/{outfilebase}.cbf')
     return result
 
 def fluoSub_integrated_base(cakeArray, polArray_integrated, fluoK):
