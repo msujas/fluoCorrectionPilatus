@@ -10,8 +10,9 @@ def parseArgs():
     parser.add_argument('-p','--poni', type = str, help = 'poni file for measurement')
     parser.add_argument('-k','--k0', default=5e5, help= 'starting scaling factor for fluorescence to use')
     parser.add_argument('-i','--index',default=4800,type = int, help = 'xrd bin to try to flatten in optimisation (default 4800)')
-    parser.add_argument('-r','--recurse',action='store_true',help='run recursively (only averaged files)')
-    parser.add_argument('-so','--saveOriginal',action='store_true',help='save the non-integrated fluo subtracted image')
+    parser.add_argument('-r','--recurse',action='store_true',help='run recursively (only averaged files) (flag argument)')
+    parser.add_argument('-so','--saveOriginal',action='store_true',help='save the non-integrated fluo subtracted image (flag argument)')
+    #parser.add_argument('-no', '--nooptimisation',action='store_true', help= 'turn off optimisation (just take starting k value)')
     args = parser.parse_args()
     filename = args.file
     poni = args.poni
@@ -19,6 +20,7 @@ def parseArgs():
     index = args.index
     recurse = args.recurse
     so = args.saveOriginal
+    #no = args.nooptimisation
     return filename, poni, k0, index, recurse, so
 
 

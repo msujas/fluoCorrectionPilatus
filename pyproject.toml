@@ -17,6 +17,7 @@ classifiers = [
 
 [project.scripts]
 fluoCorrection = "fluoCorrectionPilatus.fluoApp:run"
+fluoIntegration = "fluoCorrectionPilatus.integrateFluo:main"
 
 [tool.setuptools]
 packages = ["fluoCorrectionPilatus"]
