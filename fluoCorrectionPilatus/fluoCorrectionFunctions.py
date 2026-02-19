@@ -93,12 +93,12 @@ def fluoSub(imageFile,poniFile, fluoK, saveOriginal = False, originalFormat = 'c
     outfile_2d = f'{direc}/xye/{outfilebase}.edf'
     mask = np.where(imageArray < 0, 1, 0)
     os.makedirs(f'{direc}/xye/', exist_ok = True)
-    poni.integrate1d(data = fluoCorr, filename = outfile,mask = mask,polarization_factor = 0.99,unit = '2th_deg',
+    x,y,e = poni.integrate1d(data = fluoCorr, filename = outfile,mask = mask,polarization_factor = 0.99,unit = '2th_deg',
                     correctSolidAngle = True, method = 'bbox',npt = 5000, error_model = 'poisson', safe = False)
     clearPyFAI_header(outfile)
     result = poni.integrate2d(data = fluoCorr, filename = outfile_2d,mask = mask,polarization_factor = 0.99,unit = "2th_deg",
                     correctSolidAngle = True, method = 'bbox',npt_rad = 5000, npt_azim = 360, error_model = 'poisson', safe = False)
-    bubbleHeader(outfile_2d,*result[:3])
+    bubbleHeader(outfile_2d,*result[:3], y,e)
     print(fluoK)
     if saveOriginal:
         match originalFormat:
@@ -229,12 +229,16 @@ def optimiseFluoBins(avfile, ponifile,k0, nbins, index, saveOriginal=False):
     print(kopt)
     return fluoSub(avfile, ponifile, kopt, saveOriginal=saveOriginal)
 
-def bubbleHeader(file2d,array2d, tth, eta):
+def bubbleHeader(file2d,array2d, tth, eta, y, e):
+    xye = np.array([tth,y,e]).transpose().flatten()
+    xyestring = ' '.join([str(i) for i in xye])
     header = {
+    'Bubble_cake_version' : 3,
     'Bubble_cake' : f'{tth[0]} {tth[-1]} {eta[0]} {eta[-1]}',
-    'Bubble_normalized': 1 
+    'Bubble_normalized': 1 ,
+    'Bubble_pattern': xyestring
     }
-    f = fabio.edfimage.EdfImage(data = array2d.transpose(), header = header)
+    f = fabio.edfimage.EdfImage(data = array2d[::-1,:], header = header)
     f.write(file2d)
 
 def clearPyFAI_header(file):
