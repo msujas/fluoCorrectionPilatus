@@ -6,9 +6,9 @@ import os
 from scipy.optimize import least_squares
 from functools import partial
 
-def integrate2d(data, mask, ponifile, filename = None):
+def integrate2d(data, mask, ponifile, filename = None, pfactor=  0.85):
     poni = pyFAI.load(ponifile)
-    return poni.integrate2d(data= data, mask = mask, filename=filename,polarization_factor = 0.99,unit = "2th_deg",correctSolidAngle = True, 
+    return poni.integrate2d(data= data, mask = mask, filename=filename,polarization_factor = pfactor,unit = "2th_deg",correctSolidAngle = True, 
                             method = 'bbox',npt_rad = 5000, npt_azim = 360, error_model = 'poisson', safe = False) #needs data, mask, filename
 
 def solidAngle(poni1,poni2, d, px, py,psize = 172e-6):
@@ -63,10 +63,10 @@ def getSAmap(ponifile):
     geo.load(ponifile)
     return geo.solidAngleArray()
 
-def getmaps(ponifile):
+def getmaps(ponifile, pfactor = 0.85):
     geo = pyFAI.geometry.Geometry()
     geo.load(ponifile)
-    return geo.twoThetaArray(), geo.solidAngleArray(), geo.polarization(factor = 0.99)
+    return geo.twoThetaArray(), geo.solidAngleArray(), geo.polarization(factor = pfactor)
 
 def fluoCorrectionPyfai(poniFile,fluoK=1):
     return getSAmap(poniFile)*fluoK
@@ -81,7 +81,7 @@ def readFile(imageFile):
         raise ValueError('image type needs to be .cbf, .edf, or .tif')
     return imageArray
 
-def fluoSub(imageFile,poniFile, fluoK, saveOriginal = False, originalFormat = 'cbf'):
+def fluoSub(imageFile,poniFile, fluoK, saveOriginal = False, originalFormat = 'cbf', pfactor = 0.85):
     imageArray = readFile(imageFile)
     fluoArray = fluoCorrectionPyfai(poniFile, fluoK)
     poni = pyFAI.load(poniFile)
@@ -93,10 +93,10 @@ def fluoSub(imageFile,poniFile, fluoK, saveOriginal = False, originalFormat = 'c
     outfile_2d = f'{direc}/xye/{outfilebase}.edf'
     mask = np.where(imageArray < 0, 1, 0)
     os.makedirs(f'{direc}/xye/', exist_ok = True)
-    x,y,e = poni.integrate1d(data = fluoCorr, filename = outfile,mask = mask,polarization_factor = 0.99,unit = '2th_deg',
+    x,y,e = poni.integrate1d(data = fluoCorr, filename = outfile,mask = mask,polarization_factor = pfactor,unit = '2th_deg',
                     correctSolidAngle = True, method = 'bbox',npt = 5000, error_model = 'poisson', safe = False)
     clearPyFAI_header(outfile)
-    result = poni.integrate2d(data = fluoCorr, filename = outfile_2d,mask = mask,polarization_factor = 0.99,unit = "2th_deg",
+    result = poni.integrate2d(data = fluoCorr, filename = outfile_2d,mask = mask,polarization_factor = pfactor,unit = "2th_deg",
                     correctSolidAngle = True, method = 'bbox',npt_rad = 5000, npt_azim = 360, error_model = 'poisson', safe = False)
     bubbleHeader(outfile_2d,*result[:3], y,e)
     print(fluoK)
@@ -115,7 +115,7 @@ def fluoSub(imageFile,poniFile, fluoK, saveOriginal = False, originalFormat = 'c
                 raise ValueError('originalFormat must be cbf or edf')
     return result
 
-def fluoSub_integrated_base(cakeArray, polArray_integrated, fluoK):
+def fluoSub_integrated_base(cakeArray: np.ndarray, polcake:np.ndarray, fluoK:float):
     '''
     The total intensity in the diffraction image can be given by
     It = Isc*P*SA + k*SA
@@ -128,7 +128,7 @@ def fluoSub_integrated_base(cakeArray, polArray_integrated, fluoK):
     It/(P*SA) = Isc + k/P
     And so k/P must be subtracted to correct the fluorescence in the already integrated pattern
     '''
-    return cakeArray - (fluoK/polArray_integrated)
+    return cakeArray - (fluoK/polcake)
 
 def saveFluosub(fluoSubArray, cakeFile, header):
     im = fabio.edfimage.EdfImage()
@@ -138,7 +138,7 @@ def saveFluosub(fluoSubArray, cakeFile, header):
 
 def getMapsintegrated(poniFile, avarrayfile):
     poni = pyFAI.load(poniFile)
-    tthmap, saMap, polmap = getmaps(poniFile)
+    _tthmap, saMap, polmap = getmaps(poniFile)
     avarray = cryio.cbfimage.CbfImage(avarrayfile).array
     mask = np.where(avarray < 0, 1, 0)
     saresult = poni.integrate2d(data = saMap, mask = mask, unit = "2th_deg", method = 'bbox',npt_rad = 5000, npt_azim = 360, 
@@ -147,17 +147,47 @@ def getMapsintegrated(poniFile, avarrayfile):
                               correctSolidAngle=False, error_model = 'poisson', safe = False)
     return saresult, polresult
 
-def fluoSub_integrated(cakeFile, poniFile, fluoK, avarrayfile):
+def polcorrection(tth, chi, pfactor):
+    "0.5 * (1.0 + cos(tth)**2 - factor * cos(2.0 * (chi + axis_offset)) * (1.0 - cos(tth)**2))"
+    tthr = tth*np.pi/180
+    chir = chi*np.pi/180
+    return 0.5*(1.0 + np.cos(tthr)**2 - pfactor * np.cos(2.0 *chir) * (1.0 - np.cos(tthr)**2))
+
+def fluoSub_integrated(cakeFile, fluoK, pfactor):
     cake = fabio.open(cakeFile)
-    cakeArray = cake.data
+    #cakeArray = cake.data
     header = cake.header 
+    tthchi = np.fromstring(header['Bubble_cake'], sep=' ')
+    tthlen = int(header['Dim_1'])
+    chilen = int(header['Dim_2'])
+    tthrange = np.linspace(tthchi[0], tthchi[1], tthlen)
+    
+    chirange = np.linspace(tthchi[2],tthchi[3],chilen)
+    tthmesh, chimesh = np.meshgrid(tthrange,chirange)
+    polcake = polcorrection(tthmesh,chimesh,pfactor)
+    '''
     saresult, polresult = getMapsintegrated(poniFile,avarrayfile)
     saIntegrated = saresult[0].transpose()
     polIntegrated = polresult[0].transpose()
     polIntegrated = np.where(polIntegrated == 0, 1, polIntegrated)
-    fluosubarray = fluoSub_integrated_base(cakeArray, polIntegrated, fluoK)
+    '''
+    fluosubarray = optimise_fluoIntegrated(cakeFile, polcake, fluoK) #fluoSub_integrated_base(cakeArray, polcake, fluoK)
+    fluosub1d = np.nanmean(np.where(fluosubarray<=0, np.nan, fluosubarray),axis=0)
+    fluosub1d = np.where(np.isnan(fluosub1d), 0, fluosub1d )
     fluosubarray = np.where(fluosubarray < 0, 0, fluosubarray)
-    saveFluosub(fluosubarray, cakeFile,header)
+    xyestring = header['Bubble_pattern']
+    xyearray = np.fromstring(xyestring, sep=' ')
+    lenarray = int(xyearray.shape[0]/3)
+    
+    x,_y,e = xyearray.reshape((lenarray,3)).transpose()
+    
+    xyearray = np.array([x,fluosub1d, e]).transpose().flatten()
+    xyestring = ' '.join(str(i) for i in xyearray)
+    header['Bubble_pattern'] = xyestring
+    #saveFluosub(fluosubarray, cakeFile,header)
+    bubbleHeader(cakeFile.replace('.edf','fluoSub.edf'), fluosubarray, tthrange, chirange, fluosub1d, e,flip=False)
+    fname1d = cakeFile.replace('.edf', 'fluoSubCake.xye')
+    np.savetxt(fname1d, np.array([x,fluosub1d, e]).transpose(), fmt = '%.6f')
     return fluosubarray
 
 def optimise_fluoFormula(k0,imagefile, ponifile, index = 4800):
@@ -174,27 +204,28 @@ def optimise_fluo(imagefile, ponifile,k0, index = 4800, iters = 20):
     kopt = result['x'][0]
     return fluoSub(imagefile,ponifile,kopt)
 
-def optimise_fluoFunc2(k, cake, polintegrated, index = 4800):
-    array = fluoSub_integrated_base(cake,polintegrated, k)
-    arrayline = array[index,:]
+def fluointegrated_lsquare(k:float, cake:np.ndarray, polcake:np.ndarray, index = 4800):
+    array = fluoSub_integrated_base(cake,polcake, k)
+    arrayline = array[:,index]
     arrayline = np.delete(arrayline, np.where(arrayline <= 0))
     linemean = np.mean(arrayline)
     return (arrayline - linemean)**2
 
-def optimise_fluoIntegrated(cakefile,ponifile, k0, avarrayfile, index = 4800, iters = 1000):
+def optimise_fluoIntegrated(cakefile, polcake, k0, index = 4800, iters = 1000):
     cakedata = fabio.open(cakefile)
     cakearray = cakedata.data
     header = cakedata.header
+    '''
     saresult, polresult = getMapsintegrated(ponifile,avarrayfile)
     saintegrated = saresult[0].transpose()
     polIntegrated = polresult[0].transpose()
     polIntegrated = np.where(polIntegrated == 0, 1, polIntegrated)
-    result = least_squares(optimise_fluoFunc2, [k0],args = (cakearray, polIntegrated, index), max_nfev=iters)
+    '''
+    result = least_squares(fluointegrated_lsquare, [k0],args = (cakearray, polcake, index), max_nfev=iters)
     kopt = result['x'][0]
     print(kopt)
-    fluosub = fluoSub_integrated_base(cakearray, polIntegrated, kopt)
+    fluosub = fluoSub_integrated_base(cakearray, polcake, kopt)
     #saveFluosub(fluosub,cakefile,header)
-    fluoSub(avarrayfile, ponifile, kopt)
     return fluosub
 
 def rebin(array, nbins):
@@ -229,7 +260,7 @@ def optimiseFluoBins(avfile, ponifile,k0, nbins, index, saveOriginal=False):
     print(kopt)
     return fluoSub(avfile, ponifile, kopt, saveOriginal=saveOriginal)
 
-def bubbleHeader(file2d,array2d, tth, eta, y, e):
+def bubbleHeader(file2d,array2d, tth, eta, y, e, flip=True):
     xye = np.array([tth,y,e]).transpose().flatten()
     xyestring = ' '.join([str(i) for i in xye])
     header = {
@@ -238,7 +269,8 @@ def bubbleHeader(file2d,array2d, tth, eta, y, e):
     'Bubble_normalized': 1 ,
     'Bubble_pattern': xyestring
     }
-    f = fabio.edfimage.EdfImage(data = array2d[::-1,:], header = header)
+    spacing = -1 if flip else 1
+    f = fabio.edfimage.EdfImage(data = array2d[::spacing,:], header = header)
     f.write(file2d)
 
 def clearPyFAI_header(file):
