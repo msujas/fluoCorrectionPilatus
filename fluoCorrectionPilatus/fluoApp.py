@@ -71,4 +71,6 @@ def cakesubargpars():
 
 def cakesub():
     cakefile, k0, pfactor = cakesubargpars()
-    return fluoSub_integrated(cakefile, k0,pfactor)
+    fluocake = FluosubCake()
+    fluocake.fluoSub_integrated(cakefile, k0,pfactor)
+

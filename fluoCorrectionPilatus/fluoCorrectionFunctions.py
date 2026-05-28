@@ -4,7 +4,7 @@ import cryio
 import fabio
 import os
 from scipy.optimize import least_squares
-from functools import partial
+from glob import glob
 
 def integrate2d(data, mask, ponifile, filename = None, pfactor=  0.85):
     poni = pyFAI.load(ponifile)
@@ -115,20 +115,7 @@ def fluoSub(imageFile,poniFile, fluoK, saveOriginal = False, originalFormat = 'c
                 raise ValueError('originalFormat must be cbf or edf')
     return result
 
-def fluoSub_integrated_base(cakeArray: np.ndarray, polcake:np.ndarray, fluoK:float):
-    '''
-    The total intensity in the diffraction image can be given by
-    It = Isc*P*SA + k*SA
-    It - total intensity
-    Isc - scattered intensity
-    P - beam polarisation effect
-    SA - pixel solid angle
-    k - fluorescence constant
-    So the integrated pattern, without fluorescence correction is given by:
-    It/(P*SA) = Isc + k/P
-    And so k/P must be subtracted to correct the fluorescence in the already integrated pattern
-    '''
-    return cakeArray - (fluoK/polcake)
+
 
 def saveFluosub(fluoSubArray, cakeFile, header):
     im = fabio.edfimage.EdfImage()
@@ -153,43 +140,6 @@ def polcorrection(tth, chi, pfactor):
     chir = chi*np.pi/180
     return 0.5*(1.0 + np.cos(tthr)**2 - pfactor * np.cos(2.0 *chir) * (1.0 - np.cos(tthr)**2))
 
-def fluoSub_integrated(cakeFile, fluoK, pfactor):
-    cake = fabio.open(cakeFile)
-    #cakeArray = cake.data
-    header = cake.header 
-    tthchi = np.fromstring(header['Bubble_cake'], sep=' ')
-    tthlen = int(header['Dim_1'])
-    chilen = int(header['Dim_2'])
-    tthrange = np.linspace(tthchi[0], tthchi[1], tthlen)
-    
-    chirange = np.linspace(tthchi[2],tthchi[3],chilen)
-    tthmesh, chimesh = np.meshgrid(tthrange,chirange)
-    polcake = polcorrection(tthmesh,chimesh,pfactor)
-    '''
-    saresult, polresult = getMapsintegrated(poniFile,avarrayfile)
-    saIntegrated = saresult[0].transpose()
-    polIntegrated = polresult[0].transpose()
-    polIntegrated = np.where(polIntegrated == 0, 1, polIntegrated)
-    '''
-    fluosubarray = optimise_fluoIntegrated(cakeFile, polcake, fluoK) #fluoSub_integrated_base(cakeArray, polcake, fluoK)
-    fluosub1d = np.nanmean(np.where(fluosubarray<=0, np.nan, fluosubarray),axis=0)
-    fluosub1d = np.where(np.isnan(fluosub1d), 0, fluosub1d )
-    fluosubarray = np.where(fluosubarray < 0, 0, fluosubarray)
-    xyestring = header['Bubble_pattern']
-    xyearray = np.fromstring(xyestring, sep=' ')
-    lenarray = int(xyearray.shape[0]/3)
-    
-    x,_y,e = xyearray.reshape((lenarray,3)).transpose()
-    
-    xyearray = np.array([x,fluosub1d, e]).transpose().flatten()
-    xyestring = ' '.join(str(i) for i in xyearray)
-    header['Bubble_pattern'] = xyestring
-    #saveFluosub(fluosubarray, cakeFile,header)
-    bubbleHeader(cakeFile.replace('.edf','fluoSub.edf'), fluosubarray, tthrange, chirange, fluosub1d, e,flip=False)
-    fname1d = cakeFile.replace('.edf', 'fluoSubCake.xye')
-    np.savetxt(fname1d, np.array([x,fluosub1d, e]).transpose(), fmt = '%.6f')
-    return fluosubarray
-
 def optimise_fluoFormula(k0,imagefile, ponifile, index = 4800):
     result = fluoSub(imagefile, ponifile, k0)
     array = result[0]
@@ -204,29 +154,82 @@ def optimise_fluo(imagefile, ponifile,k0, index = 4800, iters = 20):
     kopt = result['x'][0]
     return fluoSub(imagefile,ponifile,kopt)
 
-def fluointegrated_lsquare(k:float, cake:np.ndarray, polcake:np.ndarray, index = 4800):
-    array = fluoSub_integrated_base(cake,polcake, k)
-    arrayline = array[:,index]
-    arrayline = np.delete(arrayline, np.where(arrayline <= 0))
-    linemean = np.mean(arrayline)
-    return (arrayline - linemean)**2
+def getpolcake(cakefile, pfactor):
+    cake = fabio.open(cakefile)
+    header = cake.header 
+    tthchi = np.fromstring(header['Bubble_cake'], sep=' ')
+    tthlen = int(header['Dim_1'])
+    chilen = int(header['Dim_2'])
+    tthrange = np.linspace(tthchi[0], tthchi[1], tthlen)
+    chirange = np.linspace(tthchi[2],tthchi[3],chilen)
+    polcake = getpolcakebase(tthrange, chirange,pfactor)
+    return polcake, tthrange, chirange
 
-def optimise_fluoIntegrated(cakefile, polcake, k0, index = 4800, iters = 1000):
-    cakedata = fabio.open(cakefile)
-    cakearray = cakedata.data
-    header = cakedata.header
+def getpolcakebase(tthrange,chirange, pfactor):
+    tthmesh, chimesh = np.meshgrid(tthrange,chirange)
+    return polcorrection(tthmesh,chimesh,pfactor)
+def fluoSub_integrated_base(cakeArray: np.ndarray, polcake:np.ndarray, fluoK:float):
     '''
-    saresult, polresult = getMapsintegrated(ponifile,avarrayfile)
-    saintegrated = saresult[0].transpose()
-    polIntegrated = polresult[0].transpose()
-    polIntegrated = np.where(polIntegrated == 0, 1, polIntegrated)
+    The total intensity in the diffraction image can be given by
+    It = Isc*P*SA + k*SA
+    It - total intensity
+    Isc - scattered intensity
+    P - beam polarisation effect
+    SA - pixel solid angle
+    k - fluorescence constant
+    So the integrated pattern, without fluorescence correction is given by:
+    It/(P*SA) = Isc + k/P
+    And so k/P must be subtracted to correct the fluorescence in the already integrated pattern
     '''
-    result = least_squares(fluointegrated_lsquare, [k0],args = (cakearray, polcake, index), max_nfev=iters)
-    kopt = result['x'][0]
-    print(kopt)
-    fluosub = fluoSub_integrated_base(cakearray, polcake, kopt)
-    #saveFluosub(fluosub,cakefile,header)
-    return fluosub
+    return cakeArray - (fluoK/polcake)
+
+class FluosubCake():
+    def __init__(self,pfactor=0.85):
+        self.pfactor = pfactor
+    def get1d(self, fname,cakearray, tthrange):
+        fluosub1d = np.nanmean(np.where(cakearray<=0, np.nan, cakearray),axis=0)
+        fluosub1d = np.where(np.isnan(fluosub1d), 0, fluosub1d )
+        xvalidindexes = np.where(self.fluosubarray>0)[1]
+        npixelsx = np.zeros(shape = len(fluosub1d))
+        for i in range(len(npixelsx)):
+            npixelsx[i] = len(np.where(xvalidindexes) == i)
+        e = (self.fluosubarray**0.5)/npixelsx
+        np.savetxt(fname, np.array([tthrange,fluosub1d, e]).transpose(), fmt = '%.6f')
+        return fluosub1d, e
+    def fluoSub_integrated(self,cakeFile, fluoK):
+        polcake,tthrange,chirange = getpolcake(cakeFile,self.pfactor)
+        cakearray = fabio.open(cakeFile).data
+        self.fluosubarray = self.optimise_fluoIntegrated(cakearray, polcake, fluoK) #fluoSub_integrated_base(cakeArray, polcake, fluoK)
+        fname1d = cakeFile.replace('.edf', 'fluoSubCake.xye')
+        fluosub1d,e = self.get1d(fname1d, self.fluosubarray, tthrange)
+        self.fluosubarray = np.where(self.fluosubarray < 0, 0, self.fluosubarray)
+        bubbleHeader(cakeFile.replace('.edf','fluoSub.edf'), self.fluosubarray, tthrange, chirange, fluosub1d, e,flip=False)
+        return self.fluosubarray
+    def fluointegrated_lsquare(self, k:float, cake:np.ndarray, polcake:np.ndarray, index = 4800):
+        array = fluoSub_integrated_base(cake,polcake, k)
+        arrayline = array[:,index]
+        arrayline = np.delete(arrayline, np.where(arrayline <= 0))
+        linemean = np.mean(arrayline)
+        return (arrayline - linemean)**2
+    def optimise_fluoIntegrated(self,cakearray, polcake, k0, index = 4800, iters = 1000):
+        result = least_squares(self.fluointegrated_lsquare, [k0],args = (cakearray, polcake, index), max_nfev=iters)
+        self.kopt = result['x'][0]
+        print(self.kopt)
+        fluosub = fluoSub_integrated_base(cakearray, polcake, self.kopt)
+        return fluosub
+    def fluosub_directory(self,dirname,saveindividual=True):
+        files = glob(f'{dirname}/*.edf')
+        for file in files:
+            if 'fluoSub' in file:
+                continue
+            cakearray = fabio.open(file).data
+            polcake,tthrange,chirange = getpolcake(file,self.pfactor)
+            fluosub = fluoSub_integrated_base(cakearray,polcake,self.kopt)
+            fname1d = file.replace('.edf','fluoSub.xye')
+            y,e = self.get1d(fname1d, fluosub, tthrange)
+            if saveindividual:
+                bubbleHeader(file.replace('.edf','fluoSub.edf'), fluosub,tthrange, chirange, y,e)
+            
 
 def rebin(array, nbins):
     binsize = int(len(array)/nbins)
