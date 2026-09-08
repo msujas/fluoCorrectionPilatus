@@ -140,7 +140,7 @@ def polcorrection(tth, chi, pfactor):
     chir = chi*np.pi/180
     return 0.5*(1.0 + np.cos(tthr)**2 - pfactor * np.cos(2.0 *chir) * (1.0 - np.cos(tthr)**2))
 
-def optimise_fluoFormula(k0,imagefile, ponifile, index = 4800):
+def optimise_fluoFormula(k0,imagefile, ponifile, index = 4500):
     result = fluoSub(imagefile, ponifile, k0)
     array = result[0]
     arrayline = array[:,index]
@@ -149,7 +149,7 @@ def optimise_fluoFormula(k0,imagefile, ponifile, index = 4800):
     linemean = np.mean(arrayline)
     return (arrayline - linemean)**2
 
-def optimise_fluo(imagefile, ponifile,k0, index = 4800, iters = 20):
+def optimise_fluo(imagefile, ponifile,k0, index = 4500, iters = 20):
     result = least_squares(optimise_fluoFormula,[k0], args = (imagefile, ponifile, index), max_nfev=iters, bounds = (0,np.inf))
     kopt = result['x'][0]
     return fluoSub(imagefile,ponifile,kopt)
@@ -235,9 +235,9 @@ def rebin(array, nbins):
     binsize = int(len(array)/nbins)
     return np.array([np.mean(array[i*binsize:(i+1)*binsize]) for i in range(nbins)])
     
-def fluobinPrep(avfile, ponifile):
+def fluobinPrep(avfile, ponifile, pfactor):
     array = readFile(avfile)
-    tthmap, saMap, polmap = getmaps(ponifile)
+    tthmap, saMap, polmap = getmaps(ponifile, pfactor=pfactor)
     return array, tthmap, saMap, polmap
 
 def fluoSubBins(fluoK, array, tthmap, saMap, polmap, nbins, index):
@@ -253,11 +253,11 @@ def fluoSubBins(fluoK, array, tthmap, saMap, polmap, nbins, index):
     modifier = np.where(arrayline >= 0, 0, arrayline**2) #np.bitwise_and(arrayline.astype(np.int32),-2**32)*100/2**32 #punish negative values
     return (arrayline - linemean)**2 + modifier
 
-def optimiseFluoBins(avfile, ponifile,k0, nbins, index, saveOriginal=False):
+def optimiseFluoBins(avfile, ponifile,k0, nbins, index, saveOriginal=False, pfactor=0.85):
     #This is the default version
     if index > nbins:
         raise ValueError('index must be less than the number of bins')
-    array, tthmap, saMap, polmap = fluobinPrep(avfile,ponifile)
+    array, tthmap, saMap, polmap = fluobinPrep(avfile,ponifile, pfactor=pfactor)
     result = least_squares(fluoSubBins, k0, args = (array, tthmap, saMap, polmap,nbins, index), bounds = (0,np.inf))
     kopt = result['x'][0]
     print(kopt)
@@ -301,3 +301,12 @@ def plotBin(avfile, ponifile, nbins, index, fluoK = 0):
     plt.xlabel('chi (rad)')
     plt.ylabel('intensity')
     plt.show()
+
+
+def fluocorrection1d(y,poni:str, fluok:float, pfactor=0.85):
+    ai = pyFAI.load(poni)
+    det = ai.detector
+    array = np.ones(shape=det.shape)
+    result = ai.integrate1d(array, npt=5000, correctSolidAngle=False, polarization_factor=pfactor)
+
+    return y-fluok/result[1]

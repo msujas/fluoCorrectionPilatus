@@ -9,10 +9,11 @@ def parseArgs():
     parser.add_argument('file', type=str, help = 'filename or directory to run in (default current directory)', nargs='?', default='.')
     parser.add_argument('-p','--poni', type = str, help = 'poni file for measurement')
     parser.add_argument('-k','--k0', default=5e5, type = int, help= 'starting scaling factor for fluorescence to use')
-    parser.add_argument('-i','--index',default=4800,type = int, help = 'xrd bin to try to flatten in optimisation (default 4800)')
+    parser.add_argument('-i','--index',default=4500,type = int, help = 'xrd bin to try to flatten in optimisation (default 4800)')
     parser.add_argument('-r','--recurse',action='store_true',help='run recursively (only averaged files) (flag argument)')
     parser.add_argument('-so','--saveOriginal',action='store_true',help='save the non-integrated fluo subtracted image (flag argument)')
     parser.add_argument('-no', '--nooptimisation',action='store_true', help= 'turn off optimisation (just take starting k value)')
+    parser.add_argument('-pf','--pfactor', type=float, default=0.85, help='polarisation factor for integration (default 0.85)')
     args = parser.parse_args()
     filename = args.file
     poni = args.poni
@@ -21,23 +22,24 @@ def parseArgs():
     recurse = args.recurse
     so = args.saveOriginal
     no = args.nooptimisation
-    return filename, poni, k0, index, recurse, so, no
+    pfactor = args.pfactor
+    return filename, poni, k0, index, recurse, so, no, pfactor
 
 
-def runOptimise(file,poni, k0,index, saveOriginal=False, nooptimise = False):
+def runOptimise(file,poni, k0,index, saveOriginal=False, nooptimise = False, pfactor=0.85):
     #file,poni, k0,index = parseArgs() #average image file
     print(file)
     if nooptimise:
-        fluoSub(file, poni, k0, saveOriginal=saveOriginal)
+        fluoSub(file, poni, k0, saveOriginal=saveOriginal, pfactor=pfactor)
         return
-    optimiseFluoBins(file, poni, k0, 5000, index, saveOriginal=saveOriginal)
+    optimiseFluoBins(file, poni, k0, 5000, index, saveOriginal=saveOriginal, pfactor=pfactor)
 
-def runOptimiseDir(direc, poniFile, k0, index, saveOriginal=False, nooptimise = False):
+def runOptimiseDir(direc, poniFile, k0, index, saveOriginal=False, nooptimise = False, pfactor = 0.85):
     files = glob(f'{direc}/*.cbf')
     for file in files:
-        runOptimise(file, poniFile,k0, index, saveOriginal=saveOriginal, nooptimise=nooptimise)
+        runOptimise(file, poniFile,k0, index, saveOriginal=saveOriginal, nooptimise=nooptimise, pfactor=pfactor)
 
-def runOptimiseRecurse(direc, poniFile, k0, index, saveOriginal=False):
+def runOptimiseRecurse(direc, poniFile, k0, index, saveOriginal=False, pfactor=0.85):
     #direc, poniFile, k0, index = parseArgs()
     for root, dirs,files in os.walk(direc):
         if not 'average' in root or 'xye' in root:
@@ -45,17 +47,17 @@ def runOptimiseRecurse(direc, poniFile, k0, index, saveOriginal=False):
         cbfs = glob(f'{root}/*.cbf')
         for cbf in cbfs:
             print(cbf)
-            optimiseFluoBins(cbf, poniFile, k0, 5000, index, saveOriginal=saveOriginal)
+            optimiseFluoBins(cbf, poniFile, k0, 5000, index, saveOriginal=saveOriginal, pfactor=pfactor)
 
 def run():
-    file, poniFile, k0, index, recurse, so, no = parseArgs()
+    file, poniFile, k0, index, recurse, so, no, pfactor = parseArgs()
     if os.path.isdir(file):
         if recurse:
-            runOptimiseRecurse(file, poniFile, k0, index,so)
+            runOptimiseRecurse(file, poniFile, k0, index,so, pfactor=pfactor)
         else:
-            runOptimiseDir(file,poniFile, k0, index,so, no)
+            runOptimiseDir(file,poniFile, k0, index,so, no, pfactor=pfactor)
     else:
-        runOptimise(file, poniFile, k0, index,so, no)
+        runOptimise(file, poniFile, k0, index,so, no, pfactor=pfactor)
 
 def cakesubargpars():
     parser = argparse.ArgumentParser()
@@ -71,6 +73,6 @@ def cakesubargpars():
 
 def cakesub():
     cakefile, k0, pfactor = cakesubargpars()
-    fluocake = FluosubCake()
-    fluocake.fluoSub_integrated(cakefile, k0,pfactor)
+    fluocake = FluosubCake(pfactor=pfactor)
+    fluocake.fluoSub_integrated(cakefile, k0)
 
